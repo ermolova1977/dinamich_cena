@@ -43,16 +43,16 @@
         };
 
         const INITIAL_DATA = [
-            { id: 1, flat: "1", rooms: 1, floor: 1, area: 35.7, basePrice: 110000, status: "Свободно" },
-            { id: 2, flat: "2", rooms: 2, floor: 1, area: 53.2, basePrice: 105000, status: "Продано" },
-            { id: 3, flat: "3", rooms: 3, floor: 1, area: 78.0, basePrice: 100000, status: "Свободно" },
-            { id: 4, flat: "10", rooms: 1, floor: 2, area: 35.5, basePrice: 115000, status: "Продано" },
-            { id: 5, flat: "11", rooms: 1, floor: 2, area: 35.4, basePrice: 115000, status: "Продано" },
-            { id: 6, flat: "12", rooms: 2, floor: 2, area: 52.3, basePrice: 112000, status: "Свободно" },
-            { id: 7, flat: "15", rooms: 1, floor: 3, area: 35.5, basePrice: 120000, status: "Свободно" },
-            { id: 8, flat: "16", rooms: 1, floor: 3, area: 35.4, basePrice: 120000, status: "Свободно" },
-            { id: 9, flat: "20", rooms: 3, floor: 4, area: 77.5, basePrice: 108000, status: "Свободно" },
-            { id: 10, flat: "21", rooms: 2, floor: 4, area: 51.0, basePrice: 115000, status: "Свободно" },
+            { id: 1, house: "1", flat: "1", rooms: 1, floor: 1, area: 35.7, basePrice: 110000, status: "Свободно" },
+            { id: 2, house: "1", flat: "2", rooms: 2, floor: 1, area: 53.2, basePrice: 105000, status: "Продано" },
+            { id: 3, house: "1", flat: "3", rooms: 3, floor: 1, area: 78.0, basePrice: 100000, status: "Свободно" },
+            { id: 4, house: "1", flat: "10", rooms: 1, floor: 2, area: 35.5, basePrice: 115000, status: "Продано" },
+            { id: 5, house: "2", flat: "101", rooms: 1, floor: 2, area: 35.4, basePrice: 115000, status: "Продано" },
+            { id: 6, house: "2", flat: "102", rooms: 2, floor: 2, area: 52.3, basePrice: 112000, status: "Свободно" },
+            { id: 7, house: "2", flat: "105", rooms: 1, floor: 3, area: 35.5, basePrice: 120000, status: "Свободно" },
+            { id: 8, house: "2", flat: "106", rooms: 1, floor: 3, area: 35.4, basePrice: 120000, status: "Свободно" },
+            { id: 9, house: "3", flat: "201", rooms: 3, floor: 4, area: 77.5, basePrice: 108000, status: "Свободно" },
+            { id: 10, house: "3", flat: "202", rooms: 2, floor: 4, area: 51.0, basePrice: 115000, status: "Свободно" },
         ];
 
         function App() {
@@ -78,34 +78,52 @@
             const calculatedData = useMemo(() => {
                 return data.map(item => {
                     let recommendation = "без изменений";
-                    let newPrice = item.basePrice;
+                    let newPricePerMeter = item.basePrice;
                     let reason = "стабильный спрос";
 
                     if (item.status === "Продано") {
-                        return { ...item, currentPrice: item.basePrice, recommendation: "реализовано", reason: "лот продан" };
+                        const baseTotal = Math.round(item.area * item.basePrice);
+                        return { 
+                            ...item, 
+                            currentPrice: item.basePrice, 
+                            baseTotal,
+                            currentTotal: baseTotal,
+                            recommendation: "реализовано", 
+                            reason: "лот продан" 
+                        };
                     }
 
                     const roomStat = stats.roomsStats[item.rooms];
                     const roomSoldPercent = (roomStat.sold / roomStat.total) * 100;
 
                     if (roomSoldPercent >= threshold) {
-                        newPrice = item.basePrice * (1 + increasePercent / 100);
+                        newPricePerMeter = item.basePrice * (1 + increasePercent / 100);
                         recommendation = `повысить на ${increasePercent}%`;
                         reason = `дефицит ${item.rooms}-комнатных (продано ${Math.round(roomSoldPercent)}%)`;
                     } else if (stats.soldPercent > 15) {
-                        newPrice = item.basePrice * (1 + (increasePercent / 2) / 100);
+                        newPricePerMeter = item.basePrice * (1 + (increasePercent / 2) / 100);
                         recommendation = `повысить на ${increasePercent / 2}%`;
                         reason = "высокий общий темп продаж ЖК";
                     }
 
-                    return { ...item, currentPrice: Math.round(newPrice), recommendation, reason };
+                    const baseTotal = Math.round(item.area * item.basePrice);
+                    const currentTotal = Math.round(item.area * newPricePerMeter);
+
+                    return { 
+                        ...item, 
+                        currentPrice: Math.round(newPricePerMeter), 
+                        baseTotal,
+                        currentTotal,
+                        recommendation, 
+                        reason 
+                    };
                 });
             }, [data, threshold, increasePercent, stats]);
 
             const handleExport = () => {
-                const headers = ["№ кв", "Комнат", "Этаж", "Площадь", "Базовая цена", "Новая цена", "Рекомендация", "Причина"];
+                const headers = ["Дом", "№ кв", "Комнат", "Этаж", "S, м2", "Цена м2 (база)", "Цена м2 (новая)", "Итого (база)", "Итого (новая)", "Рекомендация", "Причина"];
                 const rows = calculatedData.map(d => [
-                    d.flat, d.rooms, d.floor, d.area, d.basePrice, d.currentPrice, d.recommendation, d.reason
+                    d.house, d.flat, d.rooms, d.floor, d.area, d.basePrice, d.currentPrice, d.baseTotal, d.currentTotal, d.recommendation, d.reason
                 ]);
                 const content = [headers, ...rows].map(e => e.join(";")).join("\n");
                 const blob = new Blob(["\ufeff" + content], { type: 'text/csv;charset=utf-8;' });
@@ -116,9 +134,9 @@
             };
 
             return (
-                <div className="p-4 md:p-8 max-w-7xl mx-auto">
+                <div className="p-4 md:p-8 max-w-[1600px] mx-auto">
                     {/* Header */}
-                    <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
+                    <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 no-print text-left">
                         <div>
                             <div className="flex items-center gap-2 mb-1">
                                 <Icon name="building-2" size={28} className="text-blue-600" />
@@ -136,7 +154,7 @@
                         </div>
                     </header>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                         {/* Sidebar */}
                         <aside className="lg:col-span-1 space-y-6 no-print">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
@@ -163,8 +181,8 @@
                                 </div>
                             </div>
                             <div className="bg-blue-600 p-6 rounded-2xl text-white shadow-xl shadow-blue-200 relative overflow-hidden">
-                                <div className="relative z-10 text-left">
-                                    <h3 className="font-bold mb-1 opacity-90 text-xs uppercase tracking-widest">Текущий статус</h3>
+                                <div className="relative z-10 text-left text-white">
+                                    <h3 className="font-bold mb-1 opacity-90 text-xs uppercase tracking-widest text-white">Текущий статус</h3>
                                     <div className="text-4xl font-black mb-1">{stats.soldPercent.toFixed(1)}%</div>
                                     <p className="text-xs opacity-80 mb-5 font-medium">объема фонда реализовано</p>
                                     <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
@@ -175,7 +193,7 @@
                         </aside>
 
                         {/* Main Table */}
-                        <div className="lg:col-span-3 space-y-6">
+                        <div className="lg:col-span-4 space-y-6">
                             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                                 <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                                     <h2 className="font-bold text-lg text-slate-800">Реестр лотов и рекомендации</h2>
@@ -187,27 +205,41 @@
                                     <table className="w-full text-left">
                                         <thead className="bg-slate-50/50 text-slate-400 text-[10px] uppercase font-bold tracking-widest">
                                             <tr>
+                                                <th className="px-6 py-4">Дом</th>
                                                 <th className="px-6 py-4">Лот / Тип</th>
                                                 <th className="px-6 py-4 text-center">Этаж</th>
                                                 <th className="px-6 py-4">S, м²</th>
-                                                <th className="px-6 py-4">База (₽)</th>
-                                                <th className="px-6 py-4">Новая (₽)</th>
+                                                <th className="px-6 py-4">Цена м² (база)</th>
+                                                <th className="px-6 py-4">Цена м² (новая)</th>
+                                                <th className="px-6 py-4">Итого (база)</th>
+                                                <th className="px-6 py-4">Итого (новая)</th>
                                                 <th className="px-6 py-4">Рекомендация</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-slate-50 text-sm">
+                                        <tbody className="divide-y divide-slate-50 text-[13px]">
                                             {calculatedData.map(item => (
                                                 <tr key={item.id} className={`${item.status === 'Продано' ? 'bg-slate-50/50 opacity-60' : 'hover:bg-blue-50/30'}`}>
+                                                    <td className="px-6 py-4 font-bold text-blue-600">Д{item.house}</td>
                                                     <td className="px-6 py-4">
-                                                        <div className="font-bold text-slate-800 uppercase">кв. {item.flat}</div>
+                                                        <div className="font-bold text-slate-800 uppercase text-[14px]">кв. {item.flat}</div>
                                                         <div className="text-[10px] text-slate-400 font-bold uppercase">{item.rooms}-комн.</div>
                                                     </td>
                                                     <td className="px-6 py-4 text-center text-slate-600 font-semibold">{item.floor}</td>
                                                     <td className="px-6 py-4 font-bold text-slate-700">{item.area}</td>
-                                                    <td className="px-6 py-4 text-slate-400 text-xs">{item.basePrice.toLocaleString()}</td>
+                                                    <td className="px-6 py-4 text-slate-400 text-xs">
+                                                        {item.basePrice.toLocaleString()} ₽
+                                                    </td>
                                                     <td className="px-6 py-4">
                                                         <div className={`font-bold ${item.currentPrice > item.basePrice ? 'text-green-600' : 'text-slate-800'}`}>
-                                                            {item.currentPrice.toLocaleString()}
+                                                            {item.currentPrice.toLocaleString()} ₽
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-slate-400 text-xs">
+                                                        {item.baseTotal.toLocaleString()} ₽
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className={`font-bold ${item.currentTotal > item.baseTotal ? 'text-green-600' : 'text-slate-800'}`}>
+                                                            {item.currentTotal.toLocaleString()} ₽
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4">
@@ -231,12 +263,12 @@
                             </div>
                             
                             {/* Info Blocks */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 no-print">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 no-print text-left">
                                 <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-2xl flex gap-4 text-left">
                                     <Icon name="alert-circle" className="text-amber-500 shrink-0" size={24} />
                                     <div>
                                         <h4 className="font-bold text-amber-900 text-xs uppercase mb-1">внимание: контроль темпа</h4>
-                                        <p className="text-xs text-amber-800 font-medium leading-relaxed opacity-80">
+                                        <p className="text-xs text-amber-800 font-medium leading-relaxed opacity-80 text-left">
                                             при остановке бронирований после повышения цен рекомендуется временная фиксация прайса на 14 календарных дней.
                                         </p>
                                     </div>
@@ -245,7 +277,7 @@
                                     <Icon name="check-circle-2" className="text-emerald-500 shrink-0" size={24} />
                                     <div>
                                         <h4 className="font-bold text-emerald-900 text-xs uppercase mb-1">оптимизация доходности</h4>
-                                        <p className="text-xs text-emerald-800 font-medium leading-relaxed opacity-80">
+                                        <p className="text-xs text-emerald-800 font-medium leading-relaxed opacity-80 text-left">
                                             выбранная стратегия увеличивает плановую выручку проекта за счет управления дефицитными лотами.
                                         </p>
                                     </div>
